@@ -7,7 +7,6 @@ import (
 	"flag"
 	"fmt"
 	"io/ioutil"
-	"os"
 	"time"
 
 	MQTT "github.com/eclipse/paho.mqtt.golang"
@@ -151,8 +150,7 @@ func main() {
 	//subscribe to the topic /go-mqtt/sample and request messages to be delivered
 	//at a maximum qos of zero, wait for the receipt to confirm the subscription
 	if token := c.Subscribe("go-mqtt/sample", 0, nil); token.Wait() && token.Error() != nil {
-		fmt.Println(token.Error())
-		os.Exit(1)
+		panic(token.Error())
 	}
 
 	//Publish 5 messages to /go-mqtt/sample at qos 1 and wait for the receipt
@@ -167,8 +165,7 @@ func main() {
 
 	//unsubscribe from /go-mqtt/sample
 	if token := c.Unsubscribe("go-mqtt/sample"); token.Wait() && token.Error() != nil {
-		fmt.Println(token.Error())
-		os.Exit(1)
+		panic(token.Error())
 	}
 
 	c.Disconnect(250)
