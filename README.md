@@ -1,5 +1,7 @@
 # helloworld-go-mqtt-awsiot
 
+## Steps
+
 0. install golang
 
 1. create thing, cert & policy in AWS IoT and download certificate and private key
@@ -25,3 +27,8 @@
 
     ./hello -conf conf.json -client-id testclient
 
+## Sources partially "borrowed" from here
+
+- https://www.eclipse.org/paho/clients/golang/
+- https://github.com/manamanmana/aws-mqtt-chat-example/
+- https://github.com/golang/go/wiki/Modules

@@ -1,22 +1,19 @@
 package main
 
 import (
-	"fmt"
-	"os"
-	"time"
-
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/json"
+	"flag"
+	"fmt"
 	"io/ioutil"
+	"os"
+	"time"
 
 	MQTT "github.com/eclipse/paho.mqtt.golang"
-
-	"flag"
 )
 
-///
-
+// Config holds all the AQS IoT properties
 type Config struct {
 	Host       string `json:"host"`
 	Port       int    `json:"port"`
@@ -26,48 +23,28 @@ type Config struct {
 }
 
 func getSettingsFromFile(p string, opts *MQTT.ClientOptions) error {
-	var (
-		conf Config
-		err  error
-	)
-
-	// Read condig json file
-	conf, err = readFromConfigFile(p)
-	if err != nil {
-		//log.SetOutput(os.Stderr)
-		//log.Error(err)
-		return err
-	}
-
-	// Make TLS configulation
-	var (
-		tlsConfig *tls.Config
-		ok        bool
-	)
-	tlsConfig, ok, err = makeTlsConfig(conf.CaCert, conf.ClientCert, conf.PrivateKey)
+	var conf, err = readFromConfigFile(p)
 	if err != nil {
 		return err
 	}
-	if ok {
-		opts.SetTLSConfig(tlsConfig)
+
+	var tlsConfig, err2 = makeTLSConfig(conf.CaCert, conf.ClientCert, conf.PrivateKey)
+	if err2 != nil {
+		return err2
 	}
 
-	// Add Broker
-	var brokerUri = /* string */ fmt.Sprintf("ssl://%s:%d", conf.Host, conf.Port)
-	opts.AddBroker(brokerUri)
+	opts.SetTLSConfig(tlsConfig)
+
+	var brokerURI = fmt.Sprintf("ssl://%s:%d", conf.Host, conf.Port)
+	opts.AddBroker(brokerURI)
 
 	return nil
 }
 
 func readFromConfigFile(path string) (Config, error) {
-	var ret = /* Config */ Config{}
+	var ret = Config{}
 
-	var (
-		b   []byte
-		err error
-	)
-
-	b, err = ioutil.ReadFile(path)
+	var b, err = ioutil.ReadFile(path)
 	if err != nil {
 		return ret, err
 	}
@@ -80,95 +57,70 @@ func readFromConfigFile(path string) (Config, error) {
 	return ret, nil
 }
 
-func makeTlsConfig(cafile, cert, key string) (*tls.Config, bool, error) {
-	var TLSConfig = /* *tls.Config */ &tls.Config{InsecureSkipVerify: false}
-	var ok bool
+func makeTLSConfig(cafile, cert, key string) (*tls.Config, error) {
+	var TLSConfig = &tls.Config{InsecureSkipVerify: false}
 
 	var certPool *x509.CertPool
 	var err error
 	var tlsCert tls.Certificate
-	if cafile != "" {
-		certPool, err = getCertPool(cafile)
-		if err != nil {
-			return nil, false, err
-		}
-		TLSConfig.RootCAs = certPool
-		ok = true
-	}
-	if cert != "" {
-		certPool, err = getCertPool(cert)
-		if err != nil {
-			return nil, false, err
-		}
-		TLSConfig.ClientAuth = tls.RequireAndVerifyClientCert
-		TLSConfig.ClientCAs = certPool
-		ok = true
 
-	}
-	if key != "" {
-		if cert == "" {
-			return nil, false, fmt.Errorf("key specified but cert is not specified")
-		}
-		tlsCert, err = tls.LoadX509KeyPair(cert, key)
-		if err != nil {
-			return nil, false, err
-		}
-		TLSConfig.Certificates = []tls.Certificate{tlsCert}
-		ok = true
-	}
-	return TLSConfig, ok, nil
-}
-
-func getCertPool(pemPath string) (*x509.CertPool, error) {
-	var certs = /* *x509.CertPool */ x509.NewCertPool()
-	var pemData []byte
-	var err error
-
-	pemData, err = ioutil.ReadFile(pemPath)
+	certPool, err = getCertPool(cafile)
 	if err != nil {
 		return nil, err
 	}
+
+	TLSConfig.RootCAs = certPool
+
+	certPool, err = getCertPool(cert)
+	if err != nil {
+		return nil, err
+	}
+
+	TLSConfig.ClientAuth = tls.RequireAndVerifyClientCert
+	TLSConfig.ClientCAs = certPool
+
+	tlsCert, err = tls.LoadX509KeyPair(cert, key)
+	if err != nil {
+		return nil, err
+	}
+
+	TLSConfig.Certificates = []tls.Certificate{tlsCert}
+
+	return TLSConfig, nil
+}
+
+func getCertPool(pemPath string) (*x509.CertPool, error) {
+	var pemData, err = ioutil.ReadFile(pemPath)
+	if err != nil {
+		return nil, err
+	}
+
+	var certs = x509.NewCertPool()
 	certs.AppendCertsFromPEM(pemData)
+
 	return certs, nil
 }
 
+// ArgOption holds command line arguments
 type ArgOption struct {
-	PubTopic string
-	SubTopic string
-	Qos      int
 	Conf     string
-	ClientId string
-	Host     string
-	Port     int
-	Cacert   string
-	Cert     string
-	Key      string
+	ClientID string
 }
 
+// NewOption creates new AWS IoT options (from a configuration file)
 func NewOption(args *ArgOption) (*MQTT.ClientOptions, error) {
 	var opts *MQTT.ClientOptions = MQTT.NewClientOptions()
 
-	var host string = args.Host
-
-	if host == "" {
-		err := getSettingsFromFile(args.Conf, opts)
-		if err != nil {
-			//log.SetOutput(os.Stderr)
-			//log.Error(err)
-			return nil, err
-		}
+	err := getSettingsFromFile(args.Conf, opts)
+	if err != nil {
+		return nil, err
 	}
 
-	var clientId string = args.ClientId
-	//if clientId == "" {
-	//	clientId = getRandomClientId()
-	//}
-	opts.SetClientID(clientId)
+	opts.SetClientID(args.ClientID)
 	opts.SetAutoReconnect(true)
+
 	return opts, nil
 }
-
-///
 
 //define a function for the default message handler
 var f MQTT.MessageHandler = func(client MQTT.Client, msg MQTT.Message) {
@@ -179,30 +131,15 @@ var f MQTT.MessageHandler = func(client MQTT.Client, msg MQTT.Message) {
 var args ArgOption
 
 func main() {
-
-	///
-
-	flag.StringVar(&args.PubTopic, "pub-topic", "", "Topic name to publish")
-	flag.StringVar(&args.SubTopic, "sub-topic", "", "Topic name to subscribe")
-	flag.IntVar(&args.Qos, "qos", 0, "QoS of the topic communication.")
 	flag.StringVar(&args.Conf, "conf", "", "Config file JSON path and name for accessing to AWS IoT endpoint")
-	flag.StringVar(&args.ClientId, "client-id", "", "client id to connect with")
+	flag.StringVar(&args.ClientID, "client-id", "", "client id to connect with")
 	flag.Parse()
 
 	opts, err := NewOption(&args)
 	if err != nil {
-		//log.SetOutput(os.Stderr)
-		//log.Error(err)
-		fmt.Fprintf(os.Stderr, "Error on making client options: %s", err)
-		os.Exit(2)
+		panic(err)
 	}
 
-	///
-
-	//create a ClientOptions struct setting the broker address, clientid, turn
-	//off trace output and set the default message handler
-	//x opts := MQTT.NewClientOptions().AddBroker("tcp://iot.eclipse.org:1883")
-	//x opts.SetClientID("go-simple")
 	opts.SetDefaultPublishHandler(f)
 
 	//create and start a client using the above ClientOptions
