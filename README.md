@@ -21,3 +21,4 @@
 4. run (you might want to create test subscription to "go-mqtt/sample" in the AWS IoT web console)
 
     ./hello -conf conf.json -client-id testclient
+    
